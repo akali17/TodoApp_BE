@@ -195,3 +195,29 @@ exports.getFullBoard = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// Lấy danh sách thành viên board
+exports.getBoardMembers = async (req, res) => {
+  try {
+    const board = await Board.findById(req.params.id)
+      .populate("members", "username email avatar")
+      .populate("owner", "username email avatar");
+
+    if (!board)
+      return res.status(404).json({ message: "Board not found" });
+
+    const isMember =
+      board.owner._id.toString() === req.user.id ||
+      board.members.some(m => m._id.toString() === req.user.id);
+
+    if (!isMember)
+      return res.status(403).json({ message: "Access denied" });
+
+    res.json({
+      owner: board.owner,
+      members: board.members
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+

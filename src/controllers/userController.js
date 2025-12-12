@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const register = async (req, res) => {
   try {
@@ -63,5 +65,54 @@ const logout = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const googleLogin = async (req, res) => {
+  try {
+    const { token } = req.body;
 
-module.exports = { register, login, logout };
+    // 1. Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture, sub } = payload;
+
+    // 2. Kiểm tra có user chưa
+    let user = await User.findOne({ email });
+
+    // 3. Nếu chưa có → tạo mới
+    if (!user) {
+      user = await User.create({
+        username: name,
+        email,
+        password: sub, // không dùng, nhưng cần field
+        avatar: picture,
+      });
+    }
+
+    // 4. Tạo JWT cho FE
+    const accessToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Google login success",
+      token: accessToken,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+      },
+    });
+  } catch (err) {
+    console.error("Google Login Error:", err.message);
+    res.status(500).json({ message: "Google login failed" });
+  }
+};
+
+module.exports = { register, login, logout, googleLogin };
+

@@ -1,5 +1,5 @@
 require("dotenv").config()
-const startDeadlineCron = require("./utils/deadlineCron");
+const startDeadlineCron = require("./utils/checkdeadline");
 const app = require("./app")
 const connectDB = require("./config/db")
 
