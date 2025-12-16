@@ -14,7 +14,7 @@ exports.createColumn = async (req, res) => {
     if (!board) return res.status(404).json({ message: "Board not found" });
 
     // User không phải member
-    if (!board.members.includes(req.userId)) {
+    if (!board.members.includes(req.user.id)) {
       return res.status(403).json({ message: "You are not a member of this board" });
     }
 
@@ -24,17 +24,27 @@ exports.createColumn = async (req, res) => {
     const column = await Column.create({
       title,
       board: boardId,
-      createdBy: req.userId,
+      createdBy: req.user.id,
       order: columnCount
     });
 
     // Ghi Activity
     await Activity.create({
       boardId: boardId,          // FIXED
-      userId: req.userId,
+      userId: req.user.id,
       action: "CREATE_COLUMN",
       detail: `Created column "${column.title}"`,
     });
+
+    // 🔥 REALTIME: Emit column:created
+    console.log(`🔥 EMITTING column:created to room board:${boardId}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${boardId}`).emit("column:created", { column });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.status(201).json({ message: "Column created", column });
 
@@ -56,21 +66,31 @@ exports.updateColumn = async (req, res) => {
 
     const board = await Board.findById(column.board);
 
-    if (!board.members.includes(req.userId)) {
+    if (!board.members.includes(req.user.id)) {
       return res.status(403).json({ message: "You are not a member of this board" });
     }
 
     column.title = title;
-    column.updatedBy = req.userId;
+    column.updatedBy = req.user.id;
     await column.save();
 
     // Log activity
     await Activity.create({
       boardId: board._id,
-      userId: req.userId,
+      userId: req.user.id,
       action: "UPDATE_COLUMN",
       detail: `Updated column to "${title}"`,
     });
+
+    // 🔥 REALTIME: Emit column:updated
+    console.log(`🔥 EMITTING column:updated to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("column:updated", { column });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.json({ message: "Column updated", column });
 
@@ -91,19 +111,32 @@ exports.deleteColumn = async (req, res) => {
 
     const board = await Board.findById(column.board);
 
-    if (!board.members.includes(req.userId)) {
+    if (!board.members.includes(req.user.id)) {
       return res.status(403).json({ message: "You are not a member of this board" });
     }
+
+    const columnId = column._id;
+    const columnTitle = column.title;
 
     await column.deleteOne();
 
     // Log activity
     await Activity.create({
       boardId: board._id,
-      userId: req.userId,
+      userId: req.user.id,
       action: "DELETE_COLUMN",
-      detail: `Deleted column "${column.title}"`,
+      detail: `Deleted column "${columnTitle}"`,
     });
+
+    // 🔥 REALTIME: Emit column:deleted
+    console.log(`🔥 EMITTING column:deleted to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("column:deleted", { columnId });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.json({ message: "Column deleted" });
 
@@ -114,7 +147,7 @@ exports.deleteColumn = async (req, res) => {
 //reoder columns
 exports.reorderColumns = async (req, res) => {
   try {
-    const { boardId, orderedColumnIds } = req.body;
+    const { boardId, reorderedColumnIds } = req.body;
 
     // Board check
     const board = await Board.findById(boardId);
@@ -124,7 +157,7 @@ exports.reorderColumns = async (req, res) => {
 
     // Update order theo mảng mới
     await Promise.all(
-      orderedColumnIds.map((colId, index) =>
+      reorderedColumnIds.map((colId, index) =>
         Column.findByIdAndUpdate(colId, { order: index })
       )
     );
@@ -136,6 +169,16 @@ exports.reorderColumns = async (req, res) => {
       action: "UPDATE_COLUMN",
       detail: "Reordered columns"
     });
+
+    // 🔥 REALTIME: Emit columns:reordered
+    console.log(`🔥 EMITTING columns:reordered to room board:${boardId}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${boardId}`).emit("columns:reordered", { reorderedColumnIds });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.json({ message: "Columns reordered" });
 

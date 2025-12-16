@@ -2,6 +2,8 @@ const Board = require("../models/Board");
 const Card = require("../models/Card");
 const Column = require("../models/Column");
 const Activity = require("../models/Activity");
+const User = require("../models/User");
+const Notification = require("../models/Notification");
 
 // Kiểm tra user có trong board không
 const isBoardMember = async (boardId, userId) => {
@@ -32,6 +34,10 @@ exports.createCard = async (req, res) => {
       order: cardCount
     });
 
+    // Populate trước emit socket
+    await card.populate("createdBy", "username");
+    await card.populate("members", "username email avatar");
+
     // Activity Log
     await Activity.create({
       boardId: board._id,
@@ -39,6 +45,16 @@ exports.createCard = async (req, res) => {
       action: "CREATE_CARD",
       detail: `Created card "${title}"`
     });
+
+    // 🔥 REALTIME: Emit card:created
+    console.log(`🔥 EMITTING card:created to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:created", { card });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.status(201).json({ message: "Card created", card });
 
@@ -95,16 +111,22 @@ exports.updateCard = async (req, res) => {
     const card = await Card.findById(id);
     if (!card) return res.status(404).json({ message: "Card not found" });
 
-    const board = await isBoardMember(card.board, req.user.id);
-    if (!board) return res.status(403).json({ message: "Not allowed" });
+    const board = await Board.findById(card.board);
+    if (!board.members.some(m => m.toString() === req.user.id))
+      return res.status(403).json({ message: "Not allowed" });
 
-    if (title) card.title = title;
-    if (description) card.description = description;
-    if (deadline) card.deadline = deadline;
+    if (title !== undefined) card.title = title;
+    if (description !== undefined) card.description = description;
+    if (deadline !== undefined) card.deadline = deadline;
     if (isDone !== undefined) card.isDone = isDone;
 
     card.updatedBy = req.user.id;
     await card.save();
+
+    // Populate card trước khi emit socket và response
+    await card.populate("members", "username email avatar");
+    await card.populate("createdBy", "username");
+    await card.populate("updatedBy", "username");
 
     await Activity.create({
       boardId: board._id,
@@ -113,12 +135,24 @@ exports.updateCard = async (req, res) => {
       detail: `Updated card "${card.title}"`
     });
 
-    res.json({ message: "Card updated", card });
+    // 🔥 REALTIME
+    console.log(`🔥 EMITTING card:updated to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    console.log("🔥 card isDone:", card.isDone);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:updated", { card });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
+
+    res.json({ card });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 // delete card
 exports.deleteCard = async (req, res) => {
   try {
@@ -130,14 +164,27 @@ exports.deleteCard = async (req, res) => {
     const board = await isBoardMember(card.board, req.user.id);
     if (!board) return res.status(403).json({ message: "Not allowed" });
 
+    const cardId = card._id;
+    const cardTitle = card.title;
+
     await card.deleteOne();
 
     await Activity.create({
       boardId: board._id,
       userId: req.user.id,
       action: "DELETE_CARD",
-      detail: `Deleted card "${card.title}"`
+      detail: `Deleted card "${cardTitle}"`
     });
+
+    // 🔥 REALTIME: Emit card:deleted
+    console.log(`🔥 EMITTING card:deleted to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:deleted", { cardId });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
 
     res.json({ message: "Card deleted" });
 
@@ -149,7 +196,7 @@ exports.deleteCard = async (req, res) => {
 exports.addMemberToCard = async (req, res) => {
   try {
     const { cardId } = req.params;
-    const { email } = req.body;
+    const { email, userId } = req.body;
 
     const card = await Card.findById(cardId);
     if (!card) return res.status(404).json({ message: "Card not found" });
@@ -159,8 +206,14 @@ exports.addMemberToCard = async (req, res) => {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Find user by userId or email
+    let user;
+    if (userId) {
+      user = await User.findById(userId);
+    } else if (email) {
+      user = await User.findOne({ email });
+    }
+    
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
@@ -174,6 +227,9 @@ exports.addMemberToCard = async (req, res) => {
       await card.save();
     }
 
+    // Populate members before sending response
+    await card.populate("members", "username email avatar");
+
     await Activity.create({
       boardId: board._id,
       userId: req.user.id,
@@ -181,11 +237,18 @@ exports.addMemberToCard = async (req, res) => {
       detail: `Added member ${user.username} to card "${card.title}"`
     });
     await Notification.create({
-      userId: user._id,
+      user: user._id,
+      sender: req.user.id,
       cardId: card._id,
       boardId: board._id,
+      type: "ASSIGNED_TO_CARD",
       message: `You were added to card "${card.title}" in board "${board.title}"`
     });
+
+    // 🔥 EMIT SOCKET EVENT
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:updated", { card });
+    }
 
     res.json({ message: "Member added", card });
 
@@ -203,15 +266,18 @@ exports.moveCard = async (req, res) => {
     if (!card) return res.status(404).json({ message: "Card not found" });
 
     const board = await Board.findById(card.board);
-    if (!board.members.includes(req.user.id))
+    if (!board) return res.status(404).json({ message: "Board not found" });
+
+    const isMember = board.members.some(
+      m => (m._id ? m._id.toString() : m.toString()) === req.user.id
+    );
+    if (!isMember)
       return res.status(403).json({ message: "Not allowed" });
 
-    const oldColumn = card.column;
+    const oldColumn = card.column.toString();
 
-    // Nếu chuyển column → reorder column cũ
     if (oldColumn !== toColumn) {
       const oldCards = await Card.find({ column: oldColumn }).sort({ order: 1 });
-
       const filtered = oldCards.filter(c => c._id.toString() !== cardId);
 
       await Promise.all(
@@ -221,25 +287,41 @@ exports.moveCard = async (req, res) => {
       );
     }
 
-    // Update card sang column mới
     card.column = toColumn;
     card.order = newOrder;
     card.updatedBy = req.user.id;
     await card.save();
 
+    // Populate card trước emit
+    await card.populate("members", "username email avatar");
+    await card.populate("createdBy", "username");
+
     await Activity.create({
       boardId: board._id,
       userId: req.user.id,
-      action: "UPDATE_CARD",
-      detail: `Moved card "${card.title}" to another column`
+      action: "MOVE_CARD",
+      detail: `Moved card "${card.title}"`
     });
 
-    res.json({ message: "Card moved", card });
+    // 🔥 REALTIME: Emit card:moved
+    console.log(`🔥 EMITTING card:moved to room board:${board._id}`);
+    console.log("🔥 req.io exists:", !!req.io);
+    
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:moved", { card });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
+
+    res.json({ card });
 
   } catch (err) {
+    console.error("MOVE CARD ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
+
 
 // remove member from card
 exports.removeMemberFromCard = async (req, res) => {
@@ -254,15 +336,35 @@ exports.removeMemberFromCard = async (req, res) => {
       return res.status(403).json({ message: "Not allowed" });
     }
 
+    const user = await User.findById(userId);
+
     card.members = card.members.filter(id => id.toString() !== userId);
 
     await card.save();
+    
+    // Populate members before sending response
+    await card.populate("members", "username email avatar");
+
     await Activity.create({
-    boardId: board._id,
-    userId: req.user.id,
-    action: "UPDATE_CARD",
-    detail: `Removed member ${removedUser.username} from card "${card.title}"`
+      boardId: board._id,
+      userId: req.user.id,
+      action: "UPDATE_CARD",
+      detail: `Removed member ${user?.username} from card "${card.title}"`
     });
+
+    await Notification.create({
+      user: userId,
+      sender: req.user.id,
+      cardId: card._id,
+      boardId: board._id,
+      type: "REMOVED_FROM_CARD",
+      message: `You were removed from card "${card.title}" in board "${board.title}"`
+    });
+
+    // 🔥 EMIT SOCKET EVENT
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("card:updated", { card });
+    }
 
     res.json({ message: "Member removed", card });
   } catch (err) {
@@ -328,12 +430,22 @@ exports.reorderCardsInColumn = async (req, res) => {
       )
     );
 
+    // Get updated cards
+    const cards = await Card.find({ _id: { $in: orderedCardIds } })
+      .populate("members", "username email avatar")
+      .populate("createdBy", "username");
+
     await Activity.create({
       boardId: board._id,
       userId: req.user.id,
       action: "UPDATE_CARD",
       detail: "Reordered cards in column"
     });
+
+    // 🔥 EMIT SOCKET EVENT
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("cards:reordered", { columnId, cards });
+    }
 
     res.json({ message: "Cards reordered" });
 

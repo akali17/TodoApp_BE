@@ -8,7 +8,10 @@ const {
   addMember,
   getBoardMembers,
   removeMember,
-  getFullBoard
+  getFullBoard,
+  updateBoard,
+  inviteMember,
+  acceptInvite
 } = require("../controllers/boardController");
 
 // POST api/boards/
@@ -20,14 +23,26 @@ router.get("/",   auth, getMyBoards);
 // GET api/boards/:id
 router.get("/:id", auth, getBoardById);
 
+// update board
+
+router.put("/:id", auth, updateBoard);
+
 // add members
 router.post("/:id/add-member", auth, addMember);
 
 //get members
 router.get("/:id/members", auth, getBoardMembers);
 
+
 //remove members
-router.delete("/:id/remove-member", auth, removeMember);
+router.post("/:id/remove-member", auth, removeMember);
+
+// Invite member by email
+router.post("/:id/invite", auth, inviteMember);
+
+// Accept invite (no auth required, token-based)
+router.post("/accept-invite", acceptInvite);
+
 // get full board data
 router.get("/:id/full", auth, getFullBoard);
 

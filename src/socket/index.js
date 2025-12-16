@@ -1,0 +1,43 @@
+const jwt = require("jsonwebtoken");
+
+let onlineUsers = new Map(); // userId -> socketId
+
+module.exports = (io) => {
+  io.on("connection", (socket) => {
+    // ================= AUTH (từ handshake) =================
+    try {
+      const token = socket.handshake.auth.token;
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
+
+        socket.userId = userId; // Lưu userId vào socket object
+        onlineUsers.set(userId, socket.id);
+
+        io.emit("online-users", Array.from(onlineUsers.keys()));
+      }
+    } catch (err) {
+      // Socket auth error
+    }
+
+    // ================= JOIN BOARD =================
+    socket.on("join-board", (boardId) => {
+      socket.join(boardId);
+    });
+
+    socket.on("leave-board", (boardId) => {
+      socket.leave(boardId);
+    });
+
+    // ================= DISCONNECT =================
+    socket.on("disconnect", () => {
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+      }
+
+      io.emit("online-users", Array.from(onlineUsers.keys()));
+    });
+  });
+
+  return io;
+};

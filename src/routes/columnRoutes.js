@@ -4,11 +4,14 @@ const auth = require("../middlewares/authMiddleware");
 const {
   createColumn,
   updateColumn,
-  deleteColumn
+  deleteColumn,
+  reorderColumns
 } = require("../controllers/columnController");
 
 router.post("/", auth, createColumn);              // Create
 router.put("/:id", auth, updateColumn);            // Update
 router.delete("/:id", auth, deleteColumn);         // Delete
+router.post("/reorder", auth, reorderColumns);   // Reorder
+
 
 module.exports = router;

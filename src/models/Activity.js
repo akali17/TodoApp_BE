@@ -17,7 +17,7 @@ const activitySchema = new mongoose.Schema({
     enum: [
       "CREATE_COLUMN", "UPDATE_COLUMN", "DELETE_COLUMN",
       "CREATE_CARD", "UPDATE_CARD", "DELETE_CARD",
-      "ADD_MEMBER", "REMOVE_MEMBER"
+      "ADD_MEMBER", "REMOVE_MEMBER", "UPDATE_BOARD","MOVE_CARD"
     ]
   },
   detail: {

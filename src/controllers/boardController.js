@@ -4,6 +4,7 @@ const Card = require("../models/Card");
 const Activity = require("../models/Activity");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
+const InviteToken = require("../models/InviteToken");
 
 // Tạo board
 exports.createBoard = async (req, res) => {
@@ -22,6 +23,53 @@ exports.createBoard = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Cập nhật title board 
+
+// PUT /api/boards/:id
+exports.updateBoard = async (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || !title.trim())
+      return res.status(400).json({ message: "Title is required" });
+
+    const board = await Board.findById(req.params.id);
+    if (!board)
+      return res.status(404).json({ message: "Board not found" });
+
+    const isMember = board.members.some(
+      m => (m._id ? m._id.toString() : m.toString()) === req.user.id
+    );
+    if (!isMember)
+      return res.status(403).json({ message: "Not allowed" });
+
+    board.title = title.trim();
+    await board.save();
+
+    await Activity.create({
+      boardId: board._id,
+      userId: req.user.id,
+      action: "UPDATE_BOARD",
+      detail: `Updated board title to "${board.title}"`
+    });
+
+    // 🔥 REALTIME
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("board:titleUpdated", {
+        title: board.title,
+      });
+    } else {
+      console.error("❌ req.io is undefined!");
+    }
+
+    res.json(board);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
 
 // Lấy tất cả board user tham gia
 exports.getMyBoards = async (req, res) => {
@@ -64,7 +112,7 @@ exports.getBoardById = async (req, res) => {
 exports.addMember = async (req, res) => {
   try {
     const boardId = req.params.id;
-    const { email } = req.body;
+    const { email, userId } = req.body;
 
     // 1. Lấy board
     const board = await Board.findById(boardId);
@@ -75,8 +123,14 @@ exports.addMember = async (req, res) => {
       return res.status(403).json({ message: "You are not the owner of this board" });
     }
 
-    // 3. Tìm user theo email
-    const user = await User.findOne({ email });
+    // 3. Tìm user theo userId hoặc email
+    let user;
+    if (userId) {
+      user = await User.findById(userId);
+    } else if (email) {
+      user = await User.findOne({ email });
+    }
+    
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // 4. Không cho thêm owner chính mình
@@ -120,7 +174,7 @@ exports.addMember = async (req, res) => {
 exports.removeMember = async (req, res) => {
   try {
     const boardId = req.params.id;
-    const { email } = req.body;
+    const { userId } = req.body;
 
     const board = await Board.findById(boardId);
     if (!board) return res.status(404).json({ message: "Board not found" });
@@ -129,16 +183,54 @@ exports.removeMember = async (req, res) => {
       return res.status(403).json({ message: "Only owner can remove members" });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // Không cho remove owner
+    if (user._id.toString() === board.owner.toString()) {
+      return res.status(400).json({ message: "Cannot remove board owner" });
+    }
+
+    // Check user có phải member không
+    const isMember = board.members.some(m => m.toString() === user._id.toString());
+    if (!isMember) {
+      return res.status(400).json({ message: "User is not a member" });
+    }
+
+    // Remove khỏi board.members
     board.members = board.members.filter(
       (m) => m.toString() !== user._id.toString()
     );
 
     await board.save();
 
-    res.json({ message: "Member removed" });
+    // Ghi activity
+    await Activity.create({
+      boardId: board._id,
+      userId: req.user.id,
+      action: "REMOVE_MEMBER",
+      detail: `Removed member "${user.username}" from board "${board.title}"`
+    });
+
+    // Tạo notification cho user bị removed
+    await Notification.create({
+      user: user._id,
+      sender: req.user.id,
+      boardId: board._id,
+      type: "REMOVE_FROM_BOARD",
+      message: `${req.user.username || "Someone"} removed you from board "${board.title}".`
+    });
+
+    // 🔥 REALTIME: Emit socket event
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("member:removed", {
+        boardId: board._id,
+        userId: user._id,
+        removedBy: req.user.id
+      });
+    }
+
+    res.json({ message: "Member removed successfully" });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -221,3 +313,107 @@ exports.getBoardMembers = async (req, res) => {
   }
 };
 
+// Invite member to board by email
+exports.inviteMember = async (req, res) => {
+  try {
+    const { boardId, email } = req.body;
+    const { sendInviteEmail } = require("../utils/emailService");
+    const crypto = require("crypto");
+
+    const board = await Board.findById(boardId).populate("owner", "username");
+    if (!board)
+      return res.status(404).json({ message: "Board not found" });
+
+    const isMember = board.members.some(
+      m => (m._id ? m._id.toString() : m.toString()) === req.user.id
+    );
+    if (!isMember)
+      return res.status(403).json({ message: "Not allowed" });
+
+    // Check if user exists
+    let user = await User.findOne({ email });
+    
+    if (!user) {
+      // User doesn't exist, create with random password
+      const randomPassword = crypto.randomBytes(16).toString("hex");
+      const bcrypt = require("bcrypt");
+      user = await User.create({
+        username: email.split("@")[0] + "_" + Math.random().toString(36).substring(7),
+        email,
+        password: bcrypt.hashSync(randomPassword, 10)
+      });
+    }
+
+    // Check if already a member
+    if (board.members.some(m => (m._id ? m._id.toString() : m.toString()) === user._id.toString())) {
+      return res.status(400).json({ message: "User is already a member" });
+    }
+
+    // Generate invite token
+    const inviteToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await InviteToken.create({
+      email,
+      boardId,
+      token: inviteToken,
+      expiresAt
+    });
+
+    // Send invite email
+    const inviteLink = `${process.env.FRONTEND_URL}/accept-invite?token=${inviteToken}`;
+    await sendInviteEmail(email, board.title, inviteLink, board.owner.username);
+
+    res.json({ message: "Invite sent to " + email });
+
+  } catch (err) {
+    console.error("INVITE ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Accept invite - adds user to board
+exports.acceptInvite = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    const inviteToken = await InviteToken.findOne({
+      token,
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null
+    }).populate("boardId");
+
+    if (!inviteToken)
+      return res.status(400).json({ message: "Invalid or expired invite token" });
+
+    const board = inviteToken.boardId;
+    let user = await User.findOne({ email: inviteToken.email });
+
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    // Add user to board
+    if (!board.members.includes(user._id)) {
+      board.members.push(user._id);
+      await board.save();
+    }
+
+    // Mark invite as accepted
+    inviteToken.acceptedAt = new Date();
+    await inviteToken.save();
+
+    // Create notification
+    await Notification.create({
+      user: user._id,
+      type: "ADD_TO_BOARD",
+      message: `You were added to board "${board.title}"`,
+      boardId: board._id
+    });
+
+    res.json({ message: "Successfully joined board", board });
+
+  } catch (err) {
+    console.error("ACCEPT INVITE ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};

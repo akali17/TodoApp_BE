@@ -20,6 +20,22 @@ const userSchema = new mongoose.Schema(
     avatar: {
       type: String,
       default: ""
+    },
+    inviteToken: {
+      type: String,
+      default: null
+    },
+    inviteTokenExpires: {
+      type: Date,
+      default: null
+    },
+    resetToken: {
+      type: String,
+      default: null
+    },
+    resetTokenExpires: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
