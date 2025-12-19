@@ -36,6 +36,15 @@ exports.createColumn = async (req, res) => {
       detail: `Created column "${column.title}"`,
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: boardId })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${boardId}`).emit("activity:updated", { activity: activities });
+    }
+
     // 🔥 REALTIME: Emit column:created
     console.log(`🔥 EMITTING column:created to room board:${boardId}`);
     console.log("🔥 req.io exists:", !!req.io);
@@ -81,6 +90,15 @@ exports.updateColumn = async (req, res) => {
       action: "UPDATE_COLUMN",
       detail: `Updated column to "${title}"`,
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     // 🔥 REALTIME: Emit column:updated
     console.log(`🔥 EMITTING column:updated to room board:${board._id}`);
@@ -128,6 +146,15 @@ exports.deleteColumn = async (req, res) => {
       detail: `Deleted column "${columnTitle}"`,
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+
     // 🔥 REALTIME: Emit column:deleted
     console.log(`🔥 EMITTING column:deleted to room board:${board._id}`);
     console.log("🔥 req.io exists:", !!req.io);
@@ -169,6 +196,15 @@ exports.reorderColumns = async (req, res) => {
       action: "UPDATE_COLUMN",
       detail: "Reordered columns"
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${boardId}`).emit("activity:updated", { activity: activities });
+    }
 
     // 🔥 REALTIME: Emit columns:reordered
     console.log(`🔥 EMITTING columns:reordered to room board:${boardId}`);

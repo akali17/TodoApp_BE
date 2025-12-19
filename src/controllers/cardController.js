@@ -46,6 +46,15 @@ exports.createCard = async (req, res) => {
       detail: `Created card "${title}"`
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+
     // 🔥 REALTIME: Emit card:created
     console.log(`🔥 EMITTING card:created to room board:${board._id}`);
     console.log("🔥 req.io exists:", !!req.io);
@@ -135,6 +144,15 @@ exports.updateCard = async (req, res) => {
       detail: `Updated card "${card.title}"`
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+
     // 🔥 REALTIME
     console.log(`🔥 EMITTING card:updated to room board:${board._id}`);
     console.log("🔥 req.io exists:", !!req.io);
@@ -175,6 +193,15 @@ exports.deleteCard = async (req, res) => {
       action: "DELETE_CARD",
       detail: `Deleted card "${cardTitle}"`
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     // 🔥 REALTIME: Emit card:deleted
     console.log(`🔥 EMITTING card:deleted to room board:${board._id}`);
@@ -236,6 +263,16 @@ exports.addMemberToCard = async (req, res) => {
       action: "UPDATE_CARD",
       detail: `Added member ${user.username} to card "${card.title}"`
     });
+    
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+    
     await Notification.create({
       user: user._id,
       sender: req.user.id,
@@ -303,6 +340,15 @@ exports.moveCard = async (req, res) => {
       detail: `Moved card "${card.title}"`
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+
     // 🔥 REALTIME: Emit card:moved
     console.log(`🔥 EMITTING card:moved to room board:${board._id}`);
     console.log("🔥 req.io exists:", !!req.io);
@@ -351,6 +397,15 @@ exports.removeMemberFromCard = async (req, res) => {
       action: "UPDATE_CARD",
       detail: `Removed member ${user?.username} from card "${card.title}"`
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     await Notification.create({
       user: userId,
@@ -441,6 +496,15 @@ exports.reorderCardsInColumn = async (req, res) => {
       action: "UPDATE_CARD",
       detail: "Reordered cards in column"
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     // 🔥 EMIT SOCKET EVENT
     if (req.io) {

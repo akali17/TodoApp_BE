@@ -1,5 +1,5 @@
 const express = require("express");
-const { register, login, logout, updateProfile, changePassword, getAllUsers, getAvailableUsersForBoard, forgotPassword, resetPassword } = require("../controllers/userController");
+const { register, login, logout, updateProfile, changePassword, getAllUsers, getAvailableUsersForBoard, forgotPassword, resetPassword, verifyEmail, resendVerification } = require("../controllers/userController");
 const auth = require("../middlewares/authMiddleware");
 const { googleLogin } = require("../controllers/userController");
 const User = require("../models/User");
@@ -21,7 +21,8 @@ router.get("/me", auth, async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const { sanitizeError } = require("../utils/validators");
+    res.status(500).json({ message: sanitizeError(error) });
   }
 });
 
@@ -36,6 +37,10 @@ router.post("/google-login", googleLogin);
 // Forgot & Reset Password
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+
+// Email Verification
+router.post("/verify-email", verifyEmail);
+router.post("/resend-verification", resendVerification);
 
 // Get all users
 router.get("/", auth, getAllUsers);

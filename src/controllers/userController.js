@@ -2,27 +2,77 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
+const { validateEmail, validatePassword, validateUsername, sanitizeError } = require("../utils/validators");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    const exists = await User.findOne({ email });
-    if (exists)
+    // Validate input
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ message: usernameValidation.message });
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+
+    // Check if email exists
+    const emailExists = await User.findOne({ email });
+    if (emailExists)
       return res.status(400).json({ message: "Email already exists" });
 
+    // Check if username exists
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists)
+      return res.status(400).json({ message: "Username already exists" });
+
     const hashed = await bcrypt.hash(password, 10);
+
+    // Generate verification token
+    const crypto = require("crypto");
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await User.create({
       username,
       email,
       password: hashed,
+      verificationToken,
+      verificationTokenExpires,
+      emailVerified: false,
     });
 
-    res.status(201).json({ message: "Register success", user });
+    // Send verification email
+    const { sendVerificationEmail } = require("../utils/emailService");
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    const emailSent = await sendVerificationEmail(email, verificationLink, username);
+
+    res.status(201).json({ 
+      message: emailSent 
+        ? "Registration successful! Please check your email to verify your account." 
+        : "Registration successful! However, we couldn't send the verification email. Please contact support.",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+        emailVerified: user.emailVerified,
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -30,9 +80,26 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
     const user = await User.findOne({ email });
     if (!user)
-      return res.status(400).json({ message: "User not found" });
+      return res.status(400).json({ message: "Invalid credentials" });
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return res.status(403).json({ 
+        message: "Please verify your email before logging in",
+        code: "EMAIL_NOT_VERIFIED",
+        email: user.email
+      });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
@@ -48,14 +115,14 @@ const login = async (req, res) => {
       message: "Login success",
       token,
       user: {
-        _id: user._id,
+        id: user._id,
         username: user.username,
         email: user.email,
         avatar: user.avatar,
       },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -63,7 +130,7 @@ const logout = async (req, res) => {
   try {
     res.json({ message: "Logout successful" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 const googleLogin = async (req, res) => {
@@ -89,7 +156,12 @@ const googleLogin = async (req, res) => {
         email,
         password: sub, // không dùng, nhưng cần field
         avatar: picture,
+        emailVerified: true, // Google already verified the email
       });
+    } else if (!user.emailVerified) {
+      // If user exists but email not verified, mark as verified (they're using Google)
+      user.emailVerified = true;
+      await user.save();
     }
 
     // 4. Tạo JWT cho FE
@@ -103,7 +175,7 @@ const googleLogin = async (req, res) => {
       message: "Google login success",
       token: accessToken,
       user: {
-        _id: user._id,
+        id: user._id,
         username: user.username,
         email: user.email,
         avatar: user.avatar,
@@ -111,7 +183,7 @@ const googleLogin = async (req, res) => {
     });
   } catch (err) {
     console.error("Google Login Error:", err.message);
-    res.status(500).json({ message: "Google login failed" });
+    res.status(500).json({ message: sanitizeError(err) });
   }
 };
 
@@ -123,14 +195,26 @@ const updateProfile = async (req, res) => {
     if (!userId)
       return res.status(401).json({ message: "Unauthorized" });
 
-    // If updating username/email, validate
-    if (username && email) {
-      if (!username || !email)
-        return res.status(400).json({ message: "Username and email are required" });
+    // Validate input if updating username or email
+    if (username) {
+      const usernameValidation = validateUsername(username);
+      if (!usernameValidation.valid) {
+        return res.status(400).json({ message: usernameValidation.message });
+      }
+
+      // Check if username already exists (and not the same user)
+      const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
+      if (existingUsername)
+        return res.status(400).json({ message: "Username already exists" });
+    }
+
+    if (email) {
+      if (!validateEmail(email))
+        return res.status(400).json({ message: "Invalid email format" });
 
       // Check if email already exists (and not the same user)
-      const existingUser = await User.findOne({ email, _id: { $ne: userId } });
-      if (existingUser)
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail)
         return res.status(400).json({ message: "Email already exists" });
     }
 
@@ -153,14 +237,14 @@ const updateProfile = async (req, res) => {
     res.json({
       message: "Profile updated successfully",
       user: {
-        _id: user._id,
+        id: user._id,
         username: user.username,
         email: user.email,
         avatar: user.avatar,
       },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: sanitizeError(err) });
   }
 };
 
@@ -198,7 +282,7 @@ const changePassword = async (req, res) => {
 
     res.json({ message: "Password changed successfully" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -208,7 +292,7 @@ const getAllUsers = async (req, res) => {
     const users = await User.find().select("_id username email avatar");
     res.json({ users });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -228,7 +312,7 @@ const getAvailableUsersForBoard = async (req, res) => {
 
     res.json({ users });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -238,6 +322,14 @@ const forgotPassword = async (req, res) => {
     const { email } = req.body;
     const { sendPasswordResetEmail } = require("../utils/emailService");
     const crypto = require("crypto");
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
 
     const user = await User.findOne({ email });
     if (!user)
@@ -259,7 +351,7 @@ const forgotPassword = async (req, res) => {
 
   } catch (error) {
     console.error("FORGOT PASSWORD ERROR:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
@@ -270,6 +362,11 @@ const resetPassword = async (req, res) => {
 
     if (!token || !newPassword)
       return res.status(400).json({ message: "Token and password required" });
+
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
 
     const user = await User.findOne({
       resetToken: token,
@@ -291,9 +388,110 @@ const resetPassword = async (req, res) => {
 
   } catch (error) {
     console.error("RESET PASSWORD ERROR:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: sanitizeError(error) });
   }
 };
 
-module.exports = { register, login, logout, googleLogin, updateProfile, changePassword, getAllUsers, getAvailableUsersForBoard, forgotPassword, resetPassword };
+// Verify email
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Verification token is required" });
+    }
+
+    const user = await User.findOne({
+      verificationToken: token,
+      verificationTokenExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired verification token" });
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.verificationToken = null;
+    user.verificationTokenExpires = null;
+    await user.save();
+
+    res.json({ 
+      message: "Email verified successfully! You can now log in.",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        emailVerified: user.emailVerified,
+      }
+    });
+
+  } catch (error) {
+    console.error("VERIFY EMAIL ERROR:", error);
+    res.status(500).json({ message: sanitizeError(error) });
+  }
+};
+
+// Resend verification email
+const resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const { sendVerificationEmail } = require("../utils/emailService");
+    const crypto = require("crypto");
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ message: "Email is already verified" });
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    user.verificationToken = verificationToken;
+    user.verificationTokenExpires = verificationTokenExpires;
+    await user.save();
+
+    // Send verification email
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    const emailSent = await sendVerificationEmail(email, verificationLink, user.username);
+
+    if (!emailSent) {
+      return res.status(500).json({ message: "Failed to send verification email" });
+    }
+
+    res.json({ message: "Verification email sent! Please check your inbox." });
+
+  } catch (error) {
+    console.error("RESEND VERIFICATION ERROR:", error);
+    res.status(500).json({ message: sanitizeError(error) });
+  }
+};
+
+module.exports = { 
+  register, 
+  login, 
+  logout, 
+  googleLogin, 
+  updateProfile, 
+  changePassword, 
+  getAllUsers, 
+  getAvailableUsersForBoard, 
+  forgotPassword, 
+  resetPassword,
+  verifyEmail,
+  resendVerification
+};
 

@@ -24,12 +24,12 @@ exports.createBoard = async (req, res) => {
   }
 };
 
-// Cập nhật title board 
+// Cập nhật title/description board 
 
 // PUT /api/boards/:id
 exports.updateBoard = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, description } = req.body;
     if (!title || !title.trim())
       return res.status(400).json({ message: "Title is required" });
 
@@ -44,19 +44,32 @@ exports.updateBoard = async (req, res) => {
       return res.status(403).json({ message: "Not allowed" });
 
     board.title = title.trim();
+    if (description !== undefined) {
+      board.description = description.trim();
+    }
     await board.save();
 
     await Activity.create({
       boardId: board._id,
       userId: req.user.id,
       action: "UPDATE_BOARD",
-      detail: `Updated board title to "${board.title}"`
+      detail: `Updated board`
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     // 🔥 REALTIME
     if (req.io) {
-      req.io.to(`board:${board._id}`).emit("board:titleUpdated", {
+      req.io.to(`board:${board._id}`).emit("board:updated", {
         title: board.title,
+        description: board.description,
       });
     } else {
       console.error("❌ req.io is undefined!");
@@ -155,6 +168,15 @@ exports.addMember = async (req, res) => {
       detail: `Added member "${user.username}" to board "${board.title}"`
     });
 
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
+
       // 8. Notification cho user được thêm
     await Notification.create({
       user: user._id,
@@ -211,6 +233,15 @@ exports.removeMember = async (req, res) => {
       action: "REMOVE_MEMBER",
       detail: `Removed member "${user.username}" from board "${board.title}"`
     });
+
+    // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+    if (req.io) {
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    }
 
     // Tạo notification cho user bị removed
     await Notification.create({
@@ -316,7 +347,8 @@ exports.getBoardMembers = async (req, res) => {
 // Invite member to board by email
 exports.inviteMember = async (req, res) => {
   try {
-    const { boardId, email } = req.body;
+    const { email } = req.body;
+    const boardId = req.params.id; // Get from URL parameter
     const { sendInviteEmail } = require("../utils/emailService");
     const crypto = require("crypto");
 
@@ -392,8 +424,11 @@ exports.acceptInvite = async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    // Add user to board
-    if (!board.members.includes(user._id)) {
+    // Add user to board (check if already exists first)
+    const userIdString = user._id.toString();
+    const isAlreadyMember = board.members.some(m => m.toString() === userIdString);
+    
+    if (!isAlreadyMember) {
       board.members.push(user._id);
       await board.save();
     }

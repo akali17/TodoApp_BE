@@ -1,25 +1,29 @@
 const nodemailer = require("nodemailer");
 
-// Using Gmail SMTP - you need to enable "Less Secure Apps" or use App Password
+// Using Gmail SMTP - requires App Password (not regular password)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // Use TLS (not SSL)
   auth: {
-    user: process.env.EMAIL_USER || "your-email@gmail.com",
-    pass: process.env.EMAIL_PASSWORD || "your-app-password",
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
   },
 });
 
 // Test connection
 transporter.verify((error, success) => {
   if (error) {
-    // Email service connection error
+    console.error("❌ Email service error:", error.message);
+  } else {
+    console.log("✅ Email service ready");
   }
 });
 
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
     const mailOptions = {
-      from: process.env.EMAIL_USER || "noreply@todoapp.com",
+      from: `WWW <${process.env.EMAIL_USER}>`,
       to,
       subject: `You're invited to board "${boardTitle}"`,
       html: `
@@ -38,7 +42,7 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
     await transporter.sendMail(mailOptions);
     return true;
   } catch (err) {
-    console.error("❌ Send invite email error:", err);
+    console.error("❌ Send invite email error:", err.message);
     return false;
   }
 };
@@ -46,7 +50,7 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
     const mailOptions = {
-      from: process.env.EMAIL_USER || "noreply@todoapp.com",
+      from: `WWW <${process.env.EMAIL_USER}>`,
       to,
       subject: "Password Reset Request",
       html: `
@@ -65,7 +69,37 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
     await transporter.sendMail(mailOptions);
     return true;
   } catch (err) {
-    console.error("❌ Send password reset email error:", err);
+    console.error("❌ Send password reset email error:", err.message);
+    return false;
+  }
+};
+
+const sendVerificationEmail = async (to, verificationLink, userName) => {
+  try {
+    const mailOptions = {
+      from: `WWW <${process.env.EMAIL_USER}>`,
+      to,
+      subject: "Verify Your Email Address",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Welcome to Todo App! 🎉</h2>
+          <p>Hi ${userName},</p>
+          <p>Thank you for registering! Please verify your email address to activate your account.</p>
+          <p>Click the button below to verify your email:</p>
+          <a href="${verificationLink}" style="display: inline-block; padding: 12px 30px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold;">
+            Verify Email Address
+          </a>
+          <p>Or copy this link: <a href="${verificationLink}">${verificationLink}</a></p>
+          <p style="color: #666;">This link will expire in 24 hours.</p>
+          <p style="color: #999; font-size: 12px;">If you didn't create an account, you can safely ignore this email.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (err) {
+    console.error("❌ Send verification email error:", err.message);
     return false;
   }
 };
@@ -73,4 +107,5 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
 module.exports = {
   sendInviteEmail,
   sendPasswordResetEmail,
+  sendVerificationEmail,
 };
