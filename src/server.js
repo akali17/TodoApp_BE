@@ -2,7 +2,7 @@ require("dotenv").config();
 const http = require("http");
 const { Server } = require("socket.io");
 
-const startDeadlineCron = require("./utils/checkdeadline");
+const startDeadlineCron = require("./utils/checkDeadline");
 const app = require("./app");
 const connectDB = require("./config/db");
 const socketHandler = require("./socket");
