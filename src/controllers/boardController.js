@@ -392,9 +392,10 @@ exports.inviteMember = async (req, res) => {
       expiresAt
     });
 
-    // Send invite email
+    // Send invite email (non-blocking - fire and forget)
     const inviteLink = `${process.env.FRONTEND_URL}/accept-invite?token=${inviteToken}`;
-    await sendInviteEmail(email, board.title, inviteLink, board.owner.username);
+    sendInviteEmail(email, board.title, inviteLink, board.owner.username)
+      .catch(err => console.error("❌ Email send failed:", err.message));
 
     res.json({ message: "Invite sent to " + email });
 
