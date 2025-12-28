@@ -3,7 +3,7 @@ const axios = require('axios');
 // Brevo API configuration
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
-const FROM_EMAIL = process.env.EMAIL_FROM || process.env.BREVO_EMAIL || 'noreply@app.com';
+const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@todoapp.com';
 
 if (BREVO_API_KEY) {
   console.log('✅ Brevo API configured');

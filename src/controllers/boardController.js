@@ -467,6 +467,15 @@ exports.acceptInvite = async (req, res) => {
       boardId: board._id
     });
 
+    // 🔥 REALTIME: Announce new member joined
+    if (req.io) {
+      req.io.to(`board:${board._id}`).emit("member:joined", {
+        boardId: board._id,
+        userId: user._id,
+        username: user.username
+      });
+    }
+
     res.json({ message: "Successfully joined board", board });
 
   } catch (err) {

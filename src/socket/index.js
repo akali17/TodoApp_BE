@@ -22,11 +22,21 @@ module.exports = (io) => {
 
     // ================= JOIN BOARD =================
     socket.on("join-board", (boardId) => {
-      socket.join(boardId);
+      socket.join(`board:${boardId}`);
+      // Announce user joined
+      io.to(`board:${boardId}`).emit("user:joined", {
+        userId: socket.userId,
+        onlineUsers: Array.from(onlineUsers.keys())
+      });
     });
 
     socket.on("leave-board", (boardId) => {
-      socket.leave(boardId);
+      socket.leave(`board:${boardId}`);
+      // Announce user left
+      io.to(`board:${boardId}`).emit("user:left", {
+        userId: socket.userId,
+        onlineUsers: Array.from(onlineUsers.keys())
+      });
     });
 
     // ================= DISCONNECT =================
