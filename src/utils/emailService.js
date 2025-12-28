@@ -11,9 +11,9 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
       return false;
     }
     console.log('✉️ Sending invite via Resend to', to);
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
-      to: to,
+      to,
       subject: `You're invited to board "${boardTitle}"`,
       html: `
         <h2>Board Invitation</h2>
@@ -27,6 +27,11 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
         <p>This link will expire in 7 days.</p>
       `,
     });
+    if (error) {
+      console.error('❌ Resend invite error:', error);
+      return false;
+    }
+    console.log('✅ Resend invite queued id:', data?.id);
     return true;
   } catch (err) {
     console.error("❌ Send invite email error:", err.message);
@@ -41,9 +46,9 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
       return false;
     }
     console.log('✉️ Sending password reset via Resend to', to);
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
-      to: to,
+      to,
       subject: "Password Reset Request",
       html: `
         <h2>Password Reset</h2>
@@ -57,6 +62,11 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
         <p>If you didn't request this, you can ignore this email.</p>
       `,
     });
+    if (error) {
+      console.error('❌ Resend reset error:', error);
+      return false;
+    }
+    console.log('✅ Resend reset queued id:', data?.id);
     return true;
   } catch (err) {
     console.error("❌ Send password reset email error:", err.message);
@@ -71,9 +81,9 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
       return false;
     }
     console.log('✉️ Sending verification via Resend to', to);
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
-      to: to,
+      to,
       subject: "Verify Your Email Address",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -90,6 +100,11 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
         </div>
       `,
     });
+    if (error) {
+      console.error('❌ Resend verification error:', error);
+      return false;
+    }
+    console.log('✅ Resend verification queued id:', data?.id);
     return true;
   } catch (err) {
     console.error("❌ Send verification email error:", err.message);
