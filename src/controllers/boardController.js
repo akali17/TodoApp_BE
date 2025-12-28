@@ -396,11 +396,16 @@ exports.inviteMember = async (req, res) => {
     const inviteLink = `${process.env.FRONTEND_URL}/accept-invite?token=${inviteToken}`;
     
     // Try to send email (non-blocking - don't wait)
-    // If email fails, user can still use the invite link
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+    // Use Resend if API key is available
+    if (process.env.RESEND_API_KEY) {
       sendInviteEmail(email, board.title, inviteLink, board.owner.username)
-        .then(() => console.log("✅ Invite email sent to:", email))
-        .catch(err => console.error("⚠️ Email failed (but invite created):", err.message));
+        .then((ok) => {
+          if (ok) console.log("✅ Invite email sent to:", email);
+          else console.error("⚠️ Invite email NOT sent (Resend returned false)", email);
+        })
+        .catch(err => console.error("❌ Invite email error:", err.message));
+    } else {
+      console.warn("⚠️ RESEND_API_KEY missing — invite email not attempted");
     }
 
     res.json({ message: "Invite sent to " + email });

@@ -1,11 +1,18 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const apiKey = process.env.RESEND_API_KEY;
+const resend = apiKey ? new Resend(apiKey) : null;
+const FROM_EMAIL = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
+    if (!resend) {
+      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+      return false;
+    }
+    console.log('✉️ Sending invite via Resend to', to);
     await resend.emails.send({
-      from: 'WWW <onboarding@resend.dev>', // Resend verified sender
+      from: FROM_EMAIL,
       to: to,
       subject: `You're invited to board "${boardTitle}"`,
       html: `
@@ -29,8 +36,13 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
 
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
+    if (!resend) {
+      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+      return false;
+    }
+    console.log('✉️ Sending password reset via Resend to', to);
     await resend.emails.send({
-      from: 'WWW <onboarding@resend.dev>',
+      from: FROM_EMAIL,
       to: to,
       subject: "Password Reset Request",
       html: `
@@ -54,8 +66,13 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
 
 const sendVerificationEmail = async (to, verificationLink, userName) => {
   try {
+    if (!resend) {
+      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+      return false;
+    }
+    console.log('✉️ Sending verification via Resend to', to);
     await resend.emails.send({
-      from: 'WWW <onboarding@resend.dev>',
+      from: FROM_EMAIL,
       to: to,
       subject: "Verify Your Email Address",
       html: `

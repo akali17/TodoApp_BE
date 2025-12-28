@@ -57,9 +57,16 @@ const register = async (req, res) => {
     // Send verification email (non-blocking)
     const { sendVerificationEmail } = require("../utils/emailService");
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    sendVerificationEmail(email, verificationLink, username)
-      .then(() => console.log("✅ Verification email sent to:", email))
-      .catch(err => console.error("⚠️ Verification email failed:", err.message));
+    if (process.env.RESEND_API_KEY) {
+      sendVerificationEmail(email, verificationLink, username)
+        .then((ok) => {
+          if (ok) console.log("✅ Verification email sent to:", email);
+          else console.error("⚠️ Verification email NOT sent (Resend returned false)", email);
+        })
+        .catch(err => console.error("❌ Verification email error:", err.message));
+    } else {
+      console.warn("⚠️ RESEND_API_KEY missing — verification email not attempted");
+    }
 
     res.status(201).json({ 
       message: "Registration successful! Please check your email to verify your account.",
@@ -345,9 +352,16 @@ const forgotPassword = async (req, res) => {
 
     // Send reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    sendPasswordResetEmail(email, resetLink, user.username)
-      .then(() => console.log("✅ Password reset email sent to:", email))
-      .catch(err => console.error("⚠️ Password reset email failed:", err.message));
+    if (process.env.RESEND_API_KEY) {
+      sendPasswordResetEmail(email, resetLink, user.username)
+        .then((ok) => {
+          if (ok) console.log("✅ Password reset email sent to:", email);
+          else console.error("⚠️ Password reset email NOT sent (Resend returned false)", email);
+        })
+        .catch(err => console.error("❌ Password reset email error:", err.message));
+    } else {
+      console.warn("⚠️ RESEND_API_KEY missing — reset email not attempted");
+    }
 
     res.json({ message: "Password reset email sent" });
 
