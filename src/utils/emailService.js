@@ -1,18 +1,45 @@
-const { Resend } = require('resend');
+const nodemailer = require("nodemailer");
 
-const apiKey = process.env.RESEND_API_KEY;
-const resend = apiKey ? new Resend(apiKey) : null;
-const FROM_EMAIL = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+// Brevo (Sendinblue) SMTP configuration
+const transporter = nodemailer.createTransport({
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.BREVO_EMAIL,
+    pass: process.env.BREVO_SMTP_KEY,
+  },
+  connectionTimeout: 10000,
+  greetingTimeout: 5000,
+  socketTimeout: 10000,
+});
+
+// Verify connection on startup
+if (process.env.BREVO_EMAIL && process.env.BREVO_SMTP_KEY) {
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error("❌ Brevo SMTP error:", error.message);
+    } else {
+      console.log("✅ Brevo email service ready");
+    }
+  });
+} else {
+  console.warn("⚠️ Brevo not configured: missing BREVO_EMAIL or BREVO_SMTP_KEY");
+}
+
+const FROM_EMAIL = process.env.EMAIL_FROM || process.env.BREVO_EMAIL || 'noreply@app.com';
 
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
-    if (!resend) {
-      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+    if (!process.env.BREVO_SMTP_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
       return false;
     }
-    console.log('✉️ Sending invite via Resend to', to);
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    
+    console.log('✉️ Sending invite via Brevo to', to);
+    
+    const info = await transporter.sendMail({
+      from: `WWW <${FROM_EMAIL}>`,
       to,
       subject: `You're invited to board "${boardTitle}"`,
       html: `
@@ -27,11 +54,8 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
         <p>This link will expire in 7 days.</p>
       `,
     });
-    if (error) {
-      console.error('❌ Resend invite error:', error);
-      return false;
-    }
-    console.log('✅ Resend invite queued id:', data?.id);
+    
+    console.log('✅ Brevo invite sent, messageId:', info.messageId);
     return true;
   } catch (err) {
     console.error("❌ Send invite email error:", err.message);
@@ -41,13 +65,15 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
 
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
-    if (!resend) {
-      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+    if (!process.env.BREVO_SMTP_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
       return false;
     }
-    console.log('✉️ Sending password reset via Resend to', to);
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    
+    console.log('✉️ Sending password reset via Brevo to', to);
+    
+    const info = await transporter.sendMail({
+      from: `WWW <${FROM_EMAIL}>`,
       to,
       subject: "Password Reset Request",
       html: `
@@ -62,11 +88,8 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
         <p>If you didn't request this, you can ignore this email.</p>
       `,
     });
-    if (error) {
-      console.error('❌ Resend reset error:', error);
-      return false;
-    }
-    console.log('✅ Resend reset queued id:', data?.id);
+    
+    console.log('✅ Brevo reset sent, messageId:', info.messageId);
     return true;
   } catch (err) {
     console.error("❌ Send password reset email error:", err.message);
@@ -76,13 +99,15 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
 
 const sendVerificationEmail = async (to, verificationLink, userName) => {
   try {
-    if (!resend) {
-      console.warn('⚠️ Resend not configured: missing RESEND_API_KEY');
+    if (!process.env.BREVO_SMTP_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
       return false;
     }
-    console.log('✉️ Sending verification via Resend to', to);
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    
+    console.log('✉️ Sending verification via Brevo to', to);
+    
+    const info = await transporter.sendMail({
+      from: `WWW <${FROM_EMAIL}>`,
       to,
       subject: "Verify Your Email Address",
       html: `
@@ -100,11 +125,8 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
         </div>
       `,
     });
-    if (error) {
-      console.error('❌ Resend verification error:', error);
-      return false;
-    }
-    console.log('✅ Resend verification queued id:', data?.id);
+    
+    console.log('✅ Brevo verification sent, messageId:', info.messageId);
     return true;
   } catch (err) {
     console.error("❌ Send verification email error:", err.message);
