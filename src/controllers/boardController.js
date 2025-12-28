@@ -472,9 +472,13 @@ exports.acceptInvite = async (req, res) => {
       req.io.to(`board:${board._id}`).emit("member:joined", {
         boardId: board._id,
         userId: user._id,
-        username: user.username
+        username: user.username,
+        email: user.email
       });
     }
+
+    // Populate members before returning
+    await board.populate("members", "username email");
 
     res.json({ message: "Successfully joined board", board });
 
