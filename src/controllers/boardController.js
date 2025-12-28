@@ -248,7 +248,7 @@ exports.removeMember = async (req, res) => {
       user: user._id,
       sender: req.user.id,
       boardId: board._id,
-      type: "REMOVE_FROM_BOARD",
+      type: "REMOVED_FROM_BOARD",
       message: `${req.user.username || "Someone"} removed you from board "${board.title}".`
     });
 
