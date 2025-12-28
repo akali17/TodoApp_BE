@@ -89,7 +89,7 @@ exports.getMyBoards = async (req, res) => {
   try {
     const boards = await Board.find({
       members: req.user.id,
-    });
+    }).populate("owner", "username email");
 
     res.json({ boards });
   } catch (err) {
