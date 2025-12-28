@@ -3,6 +3,16 @@ const jwt = require("jsonwebtoken");
 let onlineUsers = new Map(); // userId -> socketId
 
 module.exports = (io) => {
+  // Helper to emit to a specific online user by userId
+  io.emitToUser = (userId, event, payload) => {
+    try {
+      const sid = onlineUsers.get(String(userId));
+      if (sid) io.to(sid).emit(event, payload);
+    } catch (e) {
+      // silent
+    }
+  };
+
   io.on("connection", (socket) => {
     // ================= AUTH (từ handshake) =================
     try {
@@ -12,7 +22,7 @@ module.exports = (io) => {
         const userId = decoded.id;
 
         socket.userId = userId; // Lưu userId vào socket object
-        onlineUsers.set(userId, socket.id);
+        onlineUsers.set(String(userId), socket.id);
 
         io.emit("online-users", Array.from(onlineUsers.keys()));
       }
@@ -42,7 +52,7 @@ module.exports = (io) => {
     // ================= DISCONNECT =================
     socket.on("disconnect", () => {
       if (socket.userId) {
-        onlineUsers.delete(socket.userId);
+        onlineUsers.delete(String(socket.userId));
       }
 
       io.emit("online-users", Array.from(onlineUsers.keys()));

@@ -186,6 +186,18 @@ exports.addMember = async (req, res) => {
       message: `${req.user.username || "Someone"} added you to board "${board.title}".`
     });
 
+    // 🔥 REALTIME: notify the added user to refresh My Boards
+    if (req.io && typeof req.io.emitToUser === "function") {
+      req.io.emitToUser(user._id, "myBoards:added", {
+        board: {
+          _id: board._id,
+          title: board.title,
+          description: board.description,
+          owner: board.owner,
+        }
+      });
+    }
+
     res.json({ message: "Member added successfully", board });
 
   } catch (error) {
@@ -259,6 +271,10 @@ exports.removeMember = async (req, res) => {
         userId: user._id,
         removedBy: req.user.id
       });
+      // Notify removed user to update My Boards
+      if (typeof req.io.emitToUser === "function") {
+        req.io.emitToUser(user._id, "myBoards:removed", { boardId: board._id });
+      }
     }
 
     res.json({ message: "Member removed successfully" });
@@ -475,6 +491,17 @@ exports.acceptInvite = async (req, res) => {
         username: user.username,
         email: user.email
       });
+      // Also notify the user globally to update My Boards
+      if (typeof req.io.emitToUser === "function") {
+        req.io.emitToUser(user._id, "myBoards:added", {
+          board: {
+            _id: board._id,
+            title: board.title,
+            description: board.description,
+            owner: board.owner,
+          }
+        });
+      }
     }
 
     // Populate members before returning
@@ -565,6 +592,10 @@ exports.leaveBoard = async (req, res) => {
         userId: userId,
         username: user.username
       });
+      // Notify leaver to update My Boards across sessions
+      if (typeof req.io.emitToUser === "function") {
+        req.io.emitToUser(userId, "myBoards:removed", { boardId });
+      }
     }
     
     res.json({ message: "You have left the board" });
