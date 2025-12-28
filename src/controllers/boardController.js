@@ -392,12 +392,21 @@ exports.inviteMember = async (req, res) => {
       expiresAt
     });
 
-    // Send invite email (non-blocking - fire and forget)
+    // Generate invite link
     const inviteLink = `${process.env.FRONTEND_URL}/accept-invite?token=${inviteToken}`;
-    sendInviteEmail(email, board.title, inviteLink, board.owner.username)
-      .catch(err => console.error("❌ Email send failed:", err.message));
+    
+    // Try to send email (non-blocking - don't wait)
+    // If email fails, user can still use the invite link
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+      sendInviteEmail(email, board.title, inviteLink, board.owner.username)
+        .then(() => console.log("✅ Invite email sent to:", email))
+        .catch(err => console.error("⚠️ Email failed (but invite created):", err.message));
+    }
 
-    res.json({ message: "Invite sent to " + email });
+    res.json({ 
+      message: "Invite sent to " + email,
+      inviteLink: inviteLink // Return link for manual sharing if email fails
+    });
 
   } catch (err) {
     console.error("INVITE ERROR:", err);
