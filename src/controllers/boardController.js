@@ -541,7 +541,8 @@ exports.deleteBoard = async (req, res) => {
     if (req.io) {
       req.io.to(`board:${boardId}`).emit("board:deleted", {
         boardId: boardId,
-        message: `Board "${board.title}" has been deleted by owner`
+        boardName: board.title,
+        message: `${board.title} has been deleted`
       });
     }
     
