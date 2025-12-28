@@ -1,33 +1,12 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require('resend');
 
-// Using Gmail SMTP - requires App Password (not regular password)
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Use TLS (not SSL)
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-  connectionTimeout: 5000, // 5 seconds
-  greetingTimeout: 3000,
-  socketTimeout: 5000,
-});
-
-// Test connection
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ Email service error:", error.message);
-  } else {
-    console.log("✅ Email service ready");
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
-    const mailOptions = {
-      from: `WWW <${process.env.EMAIL_USER}>`,
-      to,
+    await resend.emails.send({
+      from: 'WWW <onboarding@resend.dev>', // Resend verified sender
+      to: to,
       subject: `You're invited to board "${boardTitle}"`,
       html: `
         <h2>Board Invitation</h2>
@@ -40,9 +19,7 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
         <p>Or copy this link: <a href="${inviteLink}">${inviteLink}</a></p>
         <p>This link will expire in 7 days.</p>
       `,
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
     return true;
   } catch (err) {
     console.error("❌ Send invite email error:", err.message);
@@ -52,9 +29,9 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
 
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
-    const mailOptions = {
-      from: `WWW <${process.env.EMAIL_USER}>`,
-      to,
+    await resend.emails.send({
+      from: 'WWW <onboarding@resend.dev>',
+      to: to,
       subject: "Password Reset Request",
       html: `
         <h2>Password Reset</h2>
@@ -67,9 +44,7 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
         <p>This link will expire in 1 hour.</p>
         <p>If you didn't request this, you can ignore this email.</p>
       `,
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
     return true;
   } catch (err) {
     console.error("❌ Send password reset email error:", err.message);
@@ -79,9 +54,9 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
 
 const sendVerificationEmail = async (to, verificationLink, userName) => {
   try {
-    const mailOptions = {
-      from: `WWW <${process.env.EMAIL_USER}>`,
-      to,
+    await resend.emails.send({
+      from: 'WWW <onboarding@resend.dev>',
+      to: to,
       subject: "Verify Your Email Address",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -97,9 +72,7 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
           <p style="color: #999; font-size: 12px;">If you didn't create an account, you can safely ignore this email.</p>
         </div>
       `,
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
     return true;
   } catch (err) {
     console.error("❌ Send verification email error:", err.message);
