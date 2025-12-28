@@ -54,15 +54,15 @@ const register = async (req, res) => {
       emailVerified: false,
     });
 
-    // Send verification email
+    // Send verification email (non-blocking)
     const { sendVerificationEmail } = require("../utils/emailService");
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    const emailSent = await sendVerificationEmail(email, verificationLink, username);
+    sendVerificationEmail(email, verificationLink, username)
+      .then(() => console.log("✅ Verification email sent to:", email))
+      .catch(err => console.error("⚠️ Verification email failed:", err.message));
 
     res.status(201).json({ 
-      message: emailSent 
-        ? "Registration successful! Please check your email to verify your account." 
-        : "Registration successful! However, we couldn't send the verification email. Please contact support.",
+      message: "Registration successful! Please check your email to verify your account.",
       user: {
         id: user._id,
         username: user.username,
@@ -343,9 +343,11 @@ const forgotPassword = async (req, res) => {
     user.resetTokenExpires = resetTokenExpires;
     await user.save();
 
-    // Send reset email
+    // Send reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    await sendPasswordResetEmail(email, resetLink, user.username);
+    sendPasswordResetEmail(email, resetLink, user.username)
+      .then(() => console.log("✅ Password reset email sent to:", email))
+      .catch(err => console.error("⚠️ Password reset email failed:", err.message));
 
     res.json({ message: "Password reset email sent" });
 
@@ -464,13 +466,11 @@ const resendVerification = async (req, res) => {
     user.verificationTokenExpires = verificationTokenExpires;
     await user.save();
 
-    // Send verification email
+    // Send verification email (non-blocking)
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    const emailSent = await sendVerificationEmail(email, verificationLink, user.username);
-
-    if (!emailSent) {
-      return res.status(500).json({ message: "Failed to send verification email" });
-    }
+    sendVerificationEmail(email, verificationLink, user.username)
+      .then(() => console.log("✅ Verification email sent to:", email))
+      .catch(err => console.error("⚠️ Verification email failed:", err.message));
 
     res.json({ message: "Verification email sent! Please check your inbox." });
 

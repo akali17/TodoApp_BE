@@ -40,8 +40,8 @@ router.post("/:id/remove-member", auth, removeMember);
 // Invite member by email
 router.post("/:id/invite", auth, inviteMember);
 
-// Accept invite (no auth required, token-based)
-router.post("/accept-invite", acceptInvite);
+// Accept invite (requires auth to verify user)
+router.post("/accept-invite", auth, acceptInvite);
 
 // get full board data
 router.get("/:id/full", auth, getFullBoard);

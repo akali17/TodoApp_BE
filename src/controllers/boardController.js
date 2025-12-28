@@ -403,10 +403,7 @@ exports.inviteMember = async (req, res) => {
         .catch(err => console.error("⚠️ Email failed (but invite created):", err.message));
     }
 
-    res.json({ 
-      message: "Invite sent to " + email,
-      inviteLink: inviteLink // Return link for manual sharing if email fails
-    });
+    res.json({ message: "Invite sent to " + email });
 
   } catch (err) {
     console.error("INVITE ERROR:", err);
@@ -429,10 +426,20 @@ exports.acceptInvite = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired invite token" });
 
     const board = inviteToken.boardId;
-    let user = await User.findOne({ email: inviteToken.email });
-
-    if (!user)
-      return res.status(404).json({ message: "User not found" });
+    
+    // Get the logged-in user (from token)
+    const loggedInUser = await User.findById(req.user.id);
+    if (!loggedInUser)
+      return res.status(401).json({ message: "Not authenticated" });
+    
+    // Check if logged-in user email matches the invited email
+    if (loggedInUser.email !== inviteToken.email) {
+      return res.status(403).json({ 
+        message: `This invite is for ${inviteToken.email}. Please login with that account.` 
+      });
+    }
+    
+    let user = loggedInUser;
 
     // Add user to board (check if already exists first)
     const userIdString = user._id.toString();
