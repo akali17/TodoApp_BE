@@ -57,7 +57,7 @@ const register = async (req, res) => {
     // Send verification email (non-blocking)
     const { sendVerificationEmail } = require("../utils/emailService");
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    if (process.env.BREVO_SMTP_KEY) {
+    if (process.env.BREVO_API_KEY) {
       sendVerificationEmail(email, verificationLink, username)
         .then((ok) => {
           if (ok) console.log("✅ Verification email sent to:", email);
@@ -65,7 +65,7 @@ const register = async (req, res) => {
         })
         .catch(err => console.error("❌ Verification email error:", err.message));
     } else {
-      console.warn("⚠️ BREVO_SMTP_KEY missing — verification email not attempted");
+      console.warn("⚠️ BREVO_API_KEY missing — verification email not attempted");
     }
 
     res.status(201).json({ 
@@ -352,7 +352,7 @@ const forgotPassword = async (req, res) => {
 
     // Send reset email (non-blocking)
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    if (process.env.BREVO_SMTP_KEY) {
+    if (process.env.BREVO_API_KEY) {
       sendPasswordResetEmail(email, resetLink, user.username)
         .then((ok) => {
           if (ok) console.log("✅ Password reset email sent to:", email);
@@ -360,7 +360,7 @@ const forgotPassword = async (req, res) => {
         })
         .catch(err => console.error("❌ Password reset email error:", err.message));
     } else {
-      console.warn("⚠️ BREVO_SMTP_KEY missing — reset email not attempted");
+      console.warn("⚠️ BREVO_API_KEY missing — reset email not attempted");
     }
 
     res.json({ message: "Password reset email sent" });

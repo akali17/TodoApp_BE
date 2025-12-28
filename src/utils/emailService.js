@@ -1,48 +1,30 @@
-const nodemailer = require("nodemailer");
+const axios = require('axios');
 
-// Brevo (Sendinblue) SMTP configuration
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.BREVO_EMAIL,
-    pass: process.env.BREVO_SMTP_KEY,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 5000,
-  socketTimeout: 10000,
-});
-
-// Verify connection on startup
-if (process.env.BREVO_EMAIL && process.env.BREVO_SMTP_KEY) {
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error("❌ Brevo SMTP error:", error.message);
-    } else {
-      console.log("✅ Brevo email service ready");
-    }
-  });
-} else {
-  console.warn("⚠️ Brevo not configured: missing BREVO_EMAIL or BREVO_SMTP_KEY");
-}
-
+// Brevo API configuration
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const FROM_EMAIL = process.env.EMAIL_FROM || process.env.BREVO_EMAIL || 'noreply@app.com';
+
+if (BREVO_API_KEY) {
+  console.log('✅ Brevo API configured');
+} else {
+  console.warn('⚠️ Brevo API not configured: missing BREVO_API_KEY');
+}
 
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
-    if (!process.env.BREVO_SMTP_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
+    if (!BREVO_API_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
     
-    console.log('✉️ Sending invite via Brevo to', to);
+    console.log('✉️ Sending invite via Brevo API to', to);
     
-    const info = await transporter.sendMail({
-      from: `WWW <${FROM_EMAIL}>`,
-      to,
+    const response = await axios.post(BREVO_API_URL, {
+      sender: { name: 'WWW', email: FROM_EMAIL },
+      to: [{ email: to }],
       subject: `You're invited to board "${boardTitle}"`,
-      html: `
+      htmlContent: `
         <h2>Board Invitation</h2>
         <p>Hi there!</p>
         <p><strong>${senderName}</strong> invited you to join the board <strong>"${boardTitle}"</strong></p>
@@ -53,30 +35,35 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
         <p>Or copy this link: <a href="${inviteLink}">${inviteLink}</a></p>
         <p>This link will expire in 7 days.</p>
       `,
+    }, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
     });
     
-    console.log('✅ Brevo invite sent, messageId:', info.messageId);
+    console.log('✅ Brevo invite sent, messageId:', response.data.messageId);
     return true;
   } catch (err) {
-    console.error("❌ Send invite email error:", err.message);
+    console.error("❌ Send invite email error:", err.response?.data?.message || err.message);
     return false;
   }
 };
 
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
-    if (!process.env.BREVO_SMTP_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
+    if (!BREVO_API_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
     
-    console.log('✉️ Sending password reset via Brevo to', to);
+    console.log('✉️ Sending password reset via Brevo API to', to);
     
-    const info = await transporter.sendMail({
-      from: `WWW <${FROM_EMAIL}>`,
-      to,
+    const response = await axios.post(BREVO_API_URL, {
+      sender: { name: 'WWW', email: FROM_EMAIL },
+      to: [{ email: to }],
       subject: "Password Reset Request",
-      html: `
+      htmlContent: `
         <h2>Password Reset</h2>
         <p>Hi ${userName},</p>
         <p>We received a request to reset your password. Click the link below to create a new password:</p>
@@ -87,30 +74,35 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
         <p>This link will expire in 1 hour.</p>
         <p>If you didn't request this, you can ignore this email.</p>
       `,
+    }, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
     });
     
-    console.log('✅ Brevo reset sent, messageId:', info.messageId);
+    console.log('✅ Brevo reset sent, messageId:', response.data.messageId);
     return true;
   } catch (err) {
-    console.error("❌ Send password reset email error:", err.message);
+    console.error("❌ Send password reset email error:", err.response?.data?.message || err.message);
     return false;
   }
 };
 
 const sendVerificationEmail = async (to, verificationLink, userName) => {
   try {
-    if (!process.env.BREVO_SMTP_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_SMTP_KEY');
+    if (!BREVO_API_KEY) {
+      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
     
-    console.log('✉️ Sending verification via Brevo to', to);
+    console.log('✉️ Sending verification via Brevo API to', to);
     
-    const info = await transporter.sendMail({
-      from: `WWW <${FROM_EMAIL}>`,
-      to,
+    const response = await axios.post(BREVO_API_URL, {
+      sender: { name: 'WWW', email: FROM_EMAIL },
+      to: [{ email: to }],
       subject: "Verify Your Email Address",
-      html: `
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2563eb;">Welcome to Todo App! 🎉</h2>
           <p>Hi ${userName},</p>
@@ -124,12 +116,17 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
           <p style="color: #999; font-size: 12px;">If you didn't create an account, you can safely ignore this email.</p>
         </div>
       `,
+    }, {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
     });
     
-    console.log('✅ Brevo verification sent, messageId:', info.messageId);
+    console.log('✅ Brevo verification sent, messageId:', response.data.messageId);
     return true;
   } catch (err) {
-    console.error("❌ Send verification email error:", err.message);
+    console.error("❌ Send verification email error:", err.response?.data?.message || err.message);
     return false;
   }
 };

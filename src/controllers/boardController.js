@@ -396,8 +396,8 @@ exports.inviteMember = async (req, res) => {
     const inviteLink = `${process.env.FRONTEND_URL}/accept-invite?token=${inviteToken}`;
     
     // Try to send email (non-blocking - don't wait)
-    // Use Brevo if SMTP key is available
-    if (process.env.BREVO_SMTP_KEY) {
+    // Use Brevo API if key is available
+    if (process.env.BREVO_API_KEY) {
       sendInviteEmail(email, board.title, inviteLink, board.owner.username)
         .then((ok) => {
           if (ok) console.log("✅ Invite email sent to:", email);
@@ -405,7 +405,7 @@ exports.inviteMember = async (req, res) => {
         })
         .catch(err => console.error("❌ Invite email error:", err.message));
     } else {
-      console.warn("⚠️ BREVO_SMTP_KEY missing — invite email not attempted");
+      console.warn("⚠️ BREVO_API_KEY missing — invite email not attempted");
     }
 
     res.json({ message: "Invite sent to " + email });
