@@ -487,3 +487,89 @@ exports.acceptInvite = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// DELETE board (owner only)
+exports.deleteBoard = async (req, res) => {
+  try {
+    const boardId = req.params.id;
+    
+    const board = await Board.findById(boardId);
+    if (!board) return res.status(404).json({ message: "Board not found" });
+    
+    // Check if user is owner
+    if (board.owner.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only owner can delete board" });
+    }
+    
+    // Delete related data
+    await Column.deleteMany({ boardId });
+    await Card.deleteMany({ boardId });
+    await Activity.deleteMany({ boardId });
+    await InviteToken.deleteMany({ boardId });
+    await Notification.deleteMany({ boardId });
+    
+    // Delete board
+    await Board.findByIdAndDelete(boardId);
+    
+    // 🔥 REALTIME: Notify all members board was deleted
+    if (req.io) {
+      req.io.to(`board:${boardId}`).emit("board:deleted", {
+        boardId: boardId,
+        message: `Board "${board.title}" has been deleted by owner`
+      });
+    }
+    
+    res.json({ message: "Board deleted successfully" });
+    
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// LEAVE board (member leaves)
+exports.leaveBoard = async (req, res) => {
+  try {
+    const boardId = req.params.id;
+    const userId = req.user.id;
+    
+    const board = await Board.findById(boardId);
+    if (!board) return res.status(404).json({ message: "Board not found" });
+    
+    // Check if user is owner (owner cannot leave)
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: "Owner cannot leave board. Delete it instead." });
+    }
+    
+    // Check if user is member
+    const isMember = board.members.some(m => m.toString() === userId);
+    if (!isMember) {
+      return res.status(400).json({ message: "You are not a member of this board" });
+    }
+    
+    // Remove user from board
+    board.members = board.members.filter(m => m.toString() !== userId);
+    await board.save();
+    
+    // Log activity
+    const user = await User.findById(userId);
+    await Activity.create({
+      boardId: board._id,
+      userId: userId,
+      action: "LEAVE_BOARD",
+      detail: `${user.username} left the board`
+    });
+    
+    // 🔥 REALTIME: Announce member left
+    if (req.io) {
+      req.io.to(`board:${boardId}`).emit("member:left", {
+        boardId: boardId,
+        userId: userId,
+        username: user.username
+      });
+    }
+    
+    res.json({ message: "You have left the board" });
+    
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -11,7 +11,9 @@ const {
   getFullBoard,
   updateBoard,
   inviteMember,
-  acceptInvite
+  acceptInvite,
+  deleteBoard,
+  leaveBoard
 } = require("../controllers/boardController");
 
 // POST api/boards/
@@ -36,7 +38,11 @@ router.get("/:id/members", auth, getBoardMembers);
 
 //remove members
 router.post("/:id/remove-member", auth, removeMember);
+// Leave board (member leaves)
+router.post("/:id/leave", auth, leaveBoard);
 
+// Delete board (owner only)
+router.delete("/:id", auth, deleteBoard);
 // Invite member by email
 router.post("/:id/invite", auth, inviteMember);
 
