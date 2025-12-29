@@ -491,11 +491,11 @@ exports.acceptInvite = async (req, res) => {
       detail: `${user.username} joined the board`
     });
 
+    // Populate members before returning
+    await board.populate("members", "username email");
+
     // 🔥 REALTIME: Announce new member joined
     if (req.io) {
-      // Populate members before emitting
-      await board.populate("members", "username email");
-      
       // Emit to board room with full member object
       req.io.to(`board:${board._id}`).emit("member:joined", {
         boardId: board._id,
@@ -522,9 +522,6 @@ exports.acceptInvite = async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(50);
       req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
-    } else {
-      // Populate members before returning
-      await board.populate("members", "username email");
     }
 
     res.json({ message: "Successfully joined board", board });
