@@ -67,7 +67,7 @@ exports.updateBoard = async (req, res) => {
 
     // 🔥 REALTIME
     if (req.io) {
-      req.io.to(`board:${board._id}`).emit("board:updated", {
+      req.io.to(`board:${board._id}`).emit("board:titleUpdated", {
         title: board.title,
         description: board.description,
       });
