@@ -483,17 +483,30 @@ exports.acceptInvite = async (req, res) => {
       boardId: board._id
     });
 
+    // Log activity
+    await Activity.create({
+      boardId: board._id,
+      userId: user._id,
+      action: "MEMBER_JOINED",
+      detail: `${user.username} joined the board`
+    });
+
     // 🔥 REALTIME: Announce new member joined
     if (req.io) {
+      // Populate members before emitting
+      await board.populate("members", "username email");
+      
+      // Emit to board room with full member object
       req.io.to(`board:${board._id}`).emit("member:joined", {
         boardId: board._id,
         userId: user._id,
         username: user.username,
         email: user.email
       });
+      
       // Also notify the user globally to update My Boards
       if (typeof req.io.emitToUser === "function") {
-        req.io.emitToUser(user._id, "myBoards:added", {
+        req.io.emitToUser(user._id.toString(), "myBoards:added", {
           board: {
             _id: board._id,
             title: board.title,
@@ -502,10 +515,17 @@ exports.acceptInvite = async (req, res) => {
           }
         });
       }
-    }
 
-    // Populate members before returning
-    await board.populate("members", "username email");
+      // 🔥 EMIT ACTIVITY UPDATE - Fetch all activities and emit
+      const activities = await Activity.find({ boardId: board._id })
+        .populate("userId", "username")
+        .sort({ createdAt: -1 })
+        .limit(50);
+      req.io.to(`board:${board._id}`).emit("activity:updated", { activity: activities });
+    } else {
+      // Populate members before returning
+      await board.populate("members", "username email");
+    }
 
     res.json({ message: "Successfully joined board", board });
 
@@ -534,17 +554,26 @@ exports.deleteBoard = async (req, res) => {
     await InviteToken.deleteMany({ boardId });
     await Notification.deleteMany({ boardId });
     
-    // Delete board
-    await Board.findByIdAndDelete(boardId);
-    
-    // 🔥 REALTIME: Notify all members board was deleted
+    // 🔥 REALTIME: Notify all members BEFORE deleting board
     if (req.io) {
+      // Emit to board room (for users currently viewing the board)
       req.io.to(`board:${boardId}`).emit("board:deleted", {
         boardId: boardId,
         boardName: board.title,
         message: `${board.title} has been deleted`
       });
+      
+      // Emit to each member individually (for users on My Boards page)
+      board.members.forEach(memberId => {
+        req.io.emitToUser(memberId.toString(), "myBoards:removed", {
+          boardId: boardId,
+          boardName: board.title
+        });
+      });
     }
+    
+    // Delete board
+    await Board.findByIdAndDelete(boardId);
     
     res.json({ message: "Board deleted successfully" });
     

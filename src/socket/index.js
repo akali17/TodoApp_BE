@@ -33,7 +33,11 @@ module.exports = (io) => {
     // ================= JOIN BOARD =================
     socket.on("join-board", (boardId) => {
       socket.join(`board:${boardId}`);
-      // Announce user joined
+      
+      // Emit online users to all users globally (including the joining user)
+      io.emit("online-users", Array.from(onlineUsers.keys()));
+      
+      // Announce user joined to board room
       io.to(`board:${boardId}`).emit("user:joined", {
         userId: socket.userId,
         onlineUsers: Array.from(onlineUsers.keys())
