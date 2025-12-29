@@ -273,7 +273,7 @@ exports.removeMember = async (req, res) => {
       });
       // Notify removed user to update My Boards
       if (typeof req.io.emitToUser === "function") {
-        req.io.emitToUser(user._id, "myBoards:removed", { boardId: board._id });
+        req.io.emitToUser(user._id.toString(), "myBoards:removed", { boardId: board._id });
       }
     }
 
@@ -497,12 +497,6 @@ exports.acceptInvite = async (req, res) => {
     // 🔥 REALTIME: Announce new member joined
     if (req.io) {
       // Emit to board room with full member object
-      console.log(`🔥 Emitting member:joined to board:${board._id}`, {
-        userId: user._id,
-        username: user.username,
-        email: user.email
-      });
-      
       req.io.to(`board:${board._id}`).emit("member:joined", {
         boardId: board._id,
         userId: user._id,
