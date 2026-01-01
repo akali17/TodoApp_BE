@@ -5,20 +5,11 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@todoapp.com';
 
-if (BREVO_API_KEY) {
-  console.log('✅ Brevo API configured');
-} else {
-  console.warn('⚠️ Brevo API not configured: missing BREVO_API_KEY');
-}
-
 const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
   try {
     if (!BREVO_API_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
-    
-    console.log('✉️ Sending invite via Brevo API to', to);
     
     const response = await axios.post(BREVO_API_URL, {
       sender: { name: 'WWW', email: FROM_EMAIL },
@@ -42,7 +33,6 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
       },
     });
     
-    console.log('✅ Brevo invite sent, messageId:', response.data.messageId);
     return true;
   } catch (err) {
     console.error("❌ Send invite email error:", err.response?.data?.message || err.message);
@@ -53,11 +43,8 @@ const sendInviteEmail = async (to, boardTitle, inviteLink, senderName) => {
 const sendPasswordResetEmail = async (to, resetLink, userName) => {
   try {
     if (!BREVO_API_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
-    
-    console.log('✉️ Sending password reset via Brevo API to', to);
     
     const response = await axios.post(BREVO_API_URL, {
       sender: { name: 'WWW', email: FROM_EMAIL },
@@ -81,7 +68,6 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
       },
     });
     
-    console.log('✅ Brevo reset sent, messageId:', response.data.messageId);
     return true;
   } catch (err) {
     console.error("❌ Send password reset email error:", err.response?.data?.message || err.message);
@@ -92,11 +78,8 @@ const sendPasswordResetEmail = async (to, resetLink, userName) => {
 const sendVerificationEmail = async (to, verificationLink, userName) => {
   try {
     if (!BREVO_API_KEY) {
-      console.warn('⚠️ Brevo not configured: missing BREVO_API_KEY');
       return false;
     }
-    
-    console.log('✉️ Sending verification via Brevo API to', to);
     
     const response = await axios.post(BREVO_API_URL, {
       sender: { name: 'WWW', email: FROM_EMAIL },
@@ -127,8 +110,7 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
     return true;
   } catch (err) {
     console.error("❌ Send verification email error:", err.response?.data?.message || err.message);
-    return false;
-  }
+    
 };
 
 module.exports = {

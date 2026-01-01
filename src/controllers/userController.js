@@ -63,13 +63,7 @@ const register = async (req, res) => {
         sendVerificationEmail(email, verificationLink, username),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 5000))
       ])
-        .then((ok) => {
-          if (ok) console.log("✅ Verification email sent to:", email);
-          else console.error("⚠️ Verification email NOT sent (Brevo returned false)", email);
-        })
         .catch(err => console.error("❌ Verification email error:", err.message));
-    } else {
-      console.warn("⚠️ BREVO_API_KEY missing — verification email not attempted");
     }
 
     res.status(201).json({ 
@@ -358,13 +352,7 @@ const forgotPassword = async (req, res) => {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     if (process.env.BREVO_API_KEY) {
       sendPasswordResetEmail(email, resetLink, user.username)
-        .then((ok) => {
-          if (ok) console.log("✅ Password reset email sent to:", email);
-          else console.error("⚠️ Password reset email NOT sent (Brevo returned false)", email);
-        })
         .catch(err => console.error("❌ Password reset email error:", err.message));
-    } else {
-      console.warn("⚠️ BREVO_API_KEY missing — reset email not attempted");
     }
 
     res.json({ message: "Password reset email sent" });
@@ -487,7 +475,6 @@ const resendVerification = async (req, res) => {
     // Send verification email (non-blocking)
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
     sendVerificationEmail(email, verificationLink, user.username)
-      .then(() => console.log("✅ Verification email sent to:", email))
       .catch(err => console.error("⚠️ Verification email failed:", err.message));
 
     res.json({ message: "Verification email sent! Please check your inbox." });
