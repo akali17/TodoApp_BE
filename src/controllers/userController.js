@@ -54,11 +54,15 @@ const register = async (req, res) => {
       emailVerified: false,
     });
 
-    // Send verification email (non-blocking)
+    // Send verification email (non-blocking with timeout)
     const { sendVerificationEmail } = require("../utils/emailService");
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
     if (process.env.BREVO_API_KEY) {
-      sendVerificationEmail(email, verificationLink, username)
+      // Send email with timeout to prevent hanging
+      Promise.race([
+        sendVerificationEmail(email, verificationLink, username),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), 5000))
+      ])
         .then((ok) => {
           if (ok) console.log("✅ Verification email sent to:", email);
           else console.error("⚠️ Verification email NOT sent (Brevo returned false)", email);
