@@ -110,7 +110,7 @@ const sendVerificationEmail = async (to, verificationLink, userName) => {
     return true;
   } catch (err) {
     console.error("❌ Send verification email error:", err.response?.data?.message || err.message);
-    
+  }
 };
 
 module.exports = {
